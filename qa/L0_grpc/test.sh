@@ -52,6 +52,16 @@ if [[ "$(< /proc/sys/kernel/osrelease)" == *microsoft* ]]; then
     BACKEND_DIR=${BACKEND_DIR:=C:/tritonserver/backends}
     SERVER=${SERVER:=/mnt/c/tritonserver/bin/tritonserver.exe}
 
+    SIMPLE_AIO_HEALTH_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_health_metadata.py
+    SIMPLE_AIO_INFER_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_infer_client.py
+    SIMPLE_AIO_STRING_INFER_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_string_infer_client.py
+    SIMPLE_AIO_SEQUENCE_INFER_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_sequence_sync_infer_client.py
+    SIMPLE_AIO_SHM_STRING_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_shm_string_client.py
+    SIMPLE_AIO_SHM_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_shm_client.py
+    SIMPLE_AIO_CUDASHM_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_cudashm_client.py
+    SIMPLE_AIO_MODEL_CONTROL_PY=${SDKDIR}/python/simple_grpc_aio_model_control.py
+    SIMPLE_AIO_KEEPALIVE_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_keepalive_client.py
+    SIMPLE_AIO_CUSTOM_ARGS_CLIENT_PY=${SDKDIR}/python/simple_grpc_aio_custom_args_client.py
     SIMPLE_HEALTH_CLIENT_PY=${SDKDIR}/python/simple_grpc_health_metadata.py
     SIMPLE_INFER_CLIENT_PY=${SDKDIR}/python/simple_grpc_infer_client.py
     SIMPLE_ASYNC_INFER_CLIENT_PY=${SDKDIR}/python/simple_grpc_async_infer_client.py
@@ -96,6 +106,16 @@ else
     SERVER=${TRITON_DIR}/bin/tritonserver
     BACKEND_DIR=${TRITON_DIR}/backends
 
+    SIMPLE_AIO_HEALTH_CLIENT_PY=../clients/simple_grpc_aio_health_metadata.py
+    SIMPLE_AIO_INFER_CLIENT_PY=../clients/simple_grpc_aio_infer_client.py
+    SIMPLE_AIO_STRING_INFER_CLIENT_PY=../clients/simple_grpc_aio_string_infer_client.py
+    SIMPLE_AIO_SEQUENCE_INFER_CLIENT_PY=../clients/simple_grpc_aio_sequence_sync_infer_client.py
+    SIMPLE_AIO_SHM_STRING_CLIENT_PY=../clients/simple_grpc_aio_shm_string_client.py
+    SIMPLE_AIO_SHM_CLIENT_PY=../clients/simple_grpc_aio_shm_client.py
+    SIMPLE_AIO_CUDASHM_CLIENT_PY=../clients/simple_grpc_aio_cudashm_client.py
+    SIMPLE_AIO_MODEL_CONTROL_PY=../clients/simple_grpc_aio_model_control.py
+    SIMPLE_AIO_KEEPALIVE_CLIENT_PY=../clients/simple_grpc_aio_keepalive_client.py
+    SIMPLE_AIO_CUSTOM_ARGS_CLIENT_PY=../clients/simple_grpc_aio_custom_args_client.py
     SIMPLE_HEALTH_CLIENT_PY=../clients/simple_grpc_health_metadata.py
     SIMPLE_INFER_CLIENT_PY=../clients/simple_grpc_infer_client.py
     SIMPLE_ASYNC_INFER_CLIENT_PY=../clients/simple_grpc_async_infer_client.py
@@ -165,9 +185,23 @@ if [ $? -ne 0 ]; then
     cat ${CLIENT_LOG}.health
     RET=1
 fi
+python $SIMPLE_AIO_HEALTH_CLIENT_PY -v >> ${CLIENT_LOG}.health.aio 2>&1
+if [ $? -ne 0 ]; then
+    cat ${CLIENT_LOG}.health.aio
+    RET=1
+fi
 
 IMAGE=../images/vulture.jpeg
 for i in \
+        $SIMPLE_AIO_INFER_CLIENT_PY \
+        $SIMPLE_AIO_ASYNC_INFER_CLIENT_PY \
+        $SIMPLE_AIO_STRING_INFER_CLIENT_PY \
+        $SIMPLE_AIO_SEQUENCE_INFER_CLIENT_PY \
+        $SIMPLE_AIO_SHM_STRING_CLIENT_PY \
+        $SIMPLE_AIO_SHM_CLIENT_PY \
+        $SIMPLE_AIO_CUDASHM_CLIENT_PY \
+        $SIMPLE_AIO_KEEPALIVE_CLIENT_PY \
+        $SIMPLE_AIO_CUSTOM_ARGS_CLIENT_PY \
         $SIMPLE_INFER_CLIENT_PY \
         $SIMPLE_ASYNC_INFER_CLIENT_PY \
         $SIMPLE_STRING_INFER_CLIENT_PY \
@@ -359,6 +393,16 @@ if [ $(cat ${CLIENT_LOG}.compress | grep "Compressed\[deflate\]" | wc -l) -eq 0 
     RET=1
 fi
 
+python $SIMPLE_AIO_INFER_CLIENT_PY -v -C deflate>> ${CLIENT_LOG}.compress.aio 2>&1
+if [ $? -ne 0 ]; then
+    cat ${CLIENT_LOG}.compress.aio
+    RET=1
+fi
+if [ $(cat ${CLIENT_LOG}.compress.aio | grep "Compressed\[deflate\]" | wc -l) -eq 0 ]; then
+    cat ${CLIENT_LOG}.compress.aio
+    RET=1
+fi
+
 set -e
 kill $SERVER_PID
 wait $SERVER_PID
@@ -381,9 +425,17 @@ if [ $? -ne 0 ]; then
     cat ${CLIENT_LOG}.model_control
     RET=1
 fi
-
 if [ $(cat ${CLIENT_LOG}.model_control | grep "PASS" | wc -l) -ne 1 ]; then
     cat ${CLIENT_LOG}.model_control
+    RET=1
+fi
+python $SIMPLE_AIO_MODEL_CONTROL_PY -v >> ${CLIENT_LOG}.model_control.aio 2>&1
+if [ $? -ne 0 ]; then
+    cat ${CLIENT_LOG}.model_control.aio
+    RET=1
+fi
+if [ $(cat ${CLIENT_LOG}.model_control.aio | grep "PASS" | wc -l) -ne 1 ]; then
+    cat ${CLIENT_LOG}.model_control.aio
     RET=1
 fi
 set -e
@@ -424,6 +476,7 @@ fi
 set +e
 
 for i in \
+    $SIMPLE_AIO_SEQUENCE_INFER_CLIENT_PY \
     $SIMPLE_STREAM_INFER_CLIENT_PY \
     $SIMPLE_SEQUENCE_INFER_CLIENT_PY \
     $SIMPLE_STREAM_INFER_CLIENT \
