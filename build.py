@@ -1100,7 +1100,7 @@ ENV TRITON_SERVER_GPU_ENABLED    {gpu_enabled}
 # Create a user that can be used to run triton as
 # non-root. Make sure that this user to given ID 1000. All server
 # artifacts copied below are assign to this user.
-ENV TRITON_SERVER_USER=triton-server
+ENV TRITON_SERVER_USER=verkada
 RUN userdel tensorrt-server > /dev/null 2>&1 || true && \
     if ! id -u $TRITON_SERVER_USER > /dev/null 2>&1 ; then \
         useradd $TRITON_SERVER_USER; \
