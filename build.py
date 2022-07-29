@@ -651,12 +651,6 @@ def onnxruntime_cmake_args(images, library_paths):
                           None, TRITON_VERSION_MAP[FLAGS.version][2])
     ]
 
-    # TRITON_ENABLE_GPU is already set for all backends in backend_cmake_args()
-    if FLAGS.enable_gpu:
-        cargs.append(
-            cmake_backend_enable('onnxruntime',
-                                 'TRITON_ENABLE_ONNXRUNTIME_TENSORRT', True))
-
     # If platform is jetpack do not use docker based build
     if target_platform() == 'jetpack':
         if 'onnxruntime' not in library_paths:
@@ -690,17 +684,17 @@ def onnxruntime_cmake_args(images, library_paths):
                                       'TRITON_BUILD_CONTAINER_VERSION', None,
                                       TRITON_VERSION_MAP[FLAGS.version][1]))
 
-            if ((target_machine() != 'aarch64') and
-                (TRITON_VERSION_MAP[FLAGS.version][3] is not None)):
-                cargs.append(
-                    cmake_backend_enable('onnxruntime',
-                                         'TRITON_ENABLE_ONNXRUNTIME_OPENVINO',
-                                         True))
-                cargs.append(
-                    cmake_backend_arg(
-                        'onnxruntime',
-                        'TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION', None,
-                        TRITON_VERSION_MAP[FLAGS.version][3]))
+    return cargs
+
+        if target_platform() == "igpu":
+            cargs.append(
+                cmake_backend_arg(
+                    "onnxruntime",
+                    "TRITON_BUILD_TARGET_PLATFORM",
+                    None,
+                    target_platform(),
+                )
+            )
 
     return cargs
 
@@ -817,19 +811,13 @@ def install_dcgm_libraries(dcgm_version, target_machine):
             return '''
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
-RUN curl -o /tmp/cuda-keyring.deb \
-    https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/sbsa/cuda-keyring_1.0-1_all.deb \
-    && apt install /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
-    apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
+RUN apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
 '''.format(dcgm_version, dcgm_version)
         else:
             return '''
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
-RUN curl -o /tmp/cuda-keyring.deb \
-    https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb \
-    && apt install /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
-    apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
+RUN apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
 '''.format(dcgm_version, dcgm_version)
 
 
@@ -1154,14 +1142,6 @@ ENV TCMALLOC_RELEASE_RATE 200
 
     if enable_gpu:
         df += install_dcgm_libraries(argmap['DCGM_VERSION'], target_machine)
-        df += '''
-# Extra defensive wiring for CUDA Compat lib
-RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
- && echo ${_CUDA_COMPAT_PATH}/lib > /etc/ld.so.conf.d/00-cuda-compat.conf \
- && ldconfig \
- && rm -f ${_CUDA_COMPAT_PATH}/lib
-'''
-
     else:
         libs_arch = 'aarch64' if target_machine == 'aarch64' else 'x86_64'
         if 'pytorch' in backends:
