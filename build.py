@@ -606,7 +606,6 @@ def backend_cmake_args(images, components, be, install_dir, library_paths):
         cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_MEMORY_TRACKER", False))
     elif FLAGS.enable_gpu:
         cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_MEMORY_TRACKER", True))
-
     cargs += cmake_backend_extra_args(be)
     cargs.append("..")
     return cargs
@@ -665,7 +664,6 @@ def onnxruntime_cmake_args(images, library_paths):
                                       'TRITON_BUILD_CONTAINER_VERSION', None,
                                       TRITON_VERSION_MAP[FLAGS.version][1]))
 
-    return cargs
 
         if target_platform() == "igpu":
             cargs.append(
@@ -820,13 +818,13 @@ def install_dcgm_libraries(dcgm_version, target_machine):
         return ""
     else:
         if target_machine == "aarch64":
-            return """
+            return '''
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
 RUN apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
 '''.format(dcgm_version, dcgm_version)
         else:
-            return """
+            return '''
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
 RUN apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
@@ -1400,9 +1398,7 @@ def create_build_dockerfiles(
         "TRITON_VERSION": FLAGS.version,
         "TRITON_CONTAINER_VERSION": FLAGS.container_version,
         "BASE_IMAGE": base_image,
-        "DCGM_VERSION": ""
-        if FLAGS.version is None or FLAGS.version not in TRITON_VERSION_MAP
-        else TRITON_VERSION_MAP[FLAGS.version][5],
+        "DCGM_VERSION": "" if FLAGS.version is None or FLAGS.version not in TRITON_VERSION_MAP else TRITON_VERSION_MAP[FLAGS.version][5],
         "CONDA_VERSION": ""
         if FLAGS.version is None or FLAGS.version not in TRITON_VERSION_MAP
         else TRITON_VERSION_MAP[FLAGS.version][6],
