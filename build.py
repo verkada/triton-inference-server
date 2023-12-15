@@ -594,10 +594,23 @@ def backend_cmake_args(images, components, be, install_dir, library_paths):
         cmake_backend_enable(be, 'TRITON_ENABLE_MALI_GPU',
                              FLAGS.enable_mali_gpu))
     cargs.append(
-        cmake_backend_enable(be, 'TRITON_ENABLE_STATS', FLAGS.enable_stats))
-    cargs.append(
-        cmake_backend_enable(be, 'TRITON_ENABLE_METRICS', FLAGS.enable_metrics))
+        cmake_backend_enable(be, "TRITON_ENABLE_METRICS", FLAGS.enable_metrics)
+    )
 
+    # [DLIS-4950] always enable below once Windows image is updated with CUPTI
+    # cargs.append(cmake_backend_enable(be, 'TRITON_ENABLE_MEMORY_TRACKER', True))
+    if (target_platform() == "windows") and (not FLAGS.no_container_build):
+        print(
+            "Warning: Detected docker build is used for Windows, backend utility 'device memory tracker' will be disabled due to missing library in CUDA Windows docker image."
+        )
+        cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_MEMORY_TRACKER", False))
+    elif target_platform() == "igpu":
+        print(
+            "Warning: Detected iGPU build, backend utility 'device memory tracker' will be disabled as iGPU doesn't contain required version of the library."
+        )
+        cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_MEMORY_TRACKER", False))
+    elif FLAGS.enable_gpu:
+        cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_MEMORY_TRACKER", True))
     cargs += cmake_backend_extra_args(be)
     cargs.append('..')
     return cargs
@@ -684,7 +697,6 @@ def onnxruntime_cmake_args(images, library_paths):
                                       'TRITON_BUILD_CONTAINER_VERSION', None,
                                       TRITON_VERSION_MAP[FLAGS.version][1]))
 
-    return cargs
 
         if target_platform() == "igpu":
             cargs.append(
@@ -807,7 +819,7 @@ def install_dcgm_libraries(dcgm_version, target_machine):
             .format(FLAGS.version))
         return ''
     else:
-        if target_machine == 'aarch64':
+        if target_machine == "aarch64":
             return '''
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
@@ -1284,22 +1296,15 @@ def create_build_dockerfiles(container_build_dir, images, backends, repoagents,
         base_image = 'ubuntu:20.04'
 
     dockerfileargmap = {
-        'NVIDIA_BUILD_REF':
-            '' if FLAGS.build_sha is None else FLAGS.build_sha,
-        'NVIDIA_BUILD_ID':
-            '<unknown>' if FLAGS.build_id is None else FLAGS.build_id,
-        'TRITON_VERSION':
-            FLAGS.version,
-        'TRITON_CONTAINER_VERSION':
-            FLAGS.container_version,
-        'BASE_IMAGE':
-            base_image,
-        'DCGM_VERSION':
-            '' if FLAGS.version is None or FLAGS.version
-            not in TRITON_VERSION_MAP else TRITON_VERSION_MAP[FLAGS.version][5],
-        'CONDA_VERSION':
-            '' if FLAGS.version is None or FLAGS.version
-            not in TRITON_VERSION_MAP else TRITON_VERSION_MAP[FLAGS.version][6]
+        "NVIDIA_BUILD_REF": "" if FLAGS.build_sha is None else FLAGS.build_sha,
+        "NVIDIA_BUILD_ID": "<unknown>" if FLAGS.build_id is None else FLAGS.build_id,
+        "TRITON_VERSION": FLAGS.version,
+        "TRITON_CONTAINER_VERSION": FLAGS.container_version,
+        "BASE_IMAGE": base_image,
+        "DCGM_VERSION": "" if FLAGS.version is None or FLAGS.version not in TRITON_VERSION_MAP else TRITON_VERSION_MAP[FLAGS.version][5],
+        "CONDA_VERSION": ""
+        if FLAGS.version is None or FLAGS.version not in TRITON_VERSION_MAP
+        else TRITON_VERSION_MAP[FLAGS.version][6],
     }
 
     # For CPU-only image we need to copy some cuda libraries and dependencies
