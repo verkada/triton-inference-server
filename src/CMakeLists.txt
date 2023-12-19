@@ -1,4 +1,4 @@
-# Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -68,22 +68,19 @@ if(${TRITON_ENABLE_GPU})
   message(STATUS "Using CUDA ${CUDA_VERSION}")
 endif() # TRITON_ENABLE_GPU
 
+# GRPC
+#
+if(${TRITON_ENABLE_GRPC})
+  find_package(gRPC CONFIG REQUIRED)
+  message(STATUS "Using gRPC ${gRPC_VERSION}")
+endif()
+
 # libevent
 #
 if(${TRITON_ENABLE_HTTP} OR ${TRITON_ENABLE_METRICS} OR
     ${TRITON_ENABLE_SAGEMAKER} OR ${TRITON_ENABLE_VERTEX_AI})
   find_package(Libevent CONFIG REQUIRED)
   message(STATUS "Using libevent ${Libevent_VERSION}")
-endif()
-
-# OpenTelemetry
-#
-if (NOT WIN32 AND ${TRITON_ENABLE_TRACING})
-    find_package(absl CONFIG REQUIRED)
-    find_package(CURL CONFIG REQUIRED)
-    find_package(nlohmann_json CONFIG REQUIRED)
-    find_package(opentelemetry-cpp CONFIG REQUIRED)
-    message(STATUS "Using opentelemetry-cpp ${opentelemetry-cpp_VERSION}")
 endif()
 
 # re2
@@ -96,7 +93,6 @@ find_library(RE2_LIBRARY NAMES re2)
 add_executable(
   main
   classification.cc
-  command_line_parser.cc
   common.cc
   main.cc
   shared_memory_manager.cc
@@ -125,11 +121,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   target_compile_options(
     main
     PRIVATE
-      /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
+      /W1 /D_WIN32_WINNT=0x0A00 /EHsc
   )
-  target_compile_definitions(main
-    PRIVATE
-      NOMINMAX)
 else()
   target_compile_options(
     main
@@ -192,6 +185,18 @@ if(${TRITON_ENABLE_HTTP} OR ${TRITON_ENABLE_METRICS} OR
   )
 endif()
 
+if(${TRITON_ENABLE_GRPC})
+  target_include_directories(
+    main
+    PRIVATE
+      $<TARGET_PROPERTY:gRPC::grpc,INTERFACE_INCLUDE_DIRECTORIES>
+  )
+
+  target_compile_definitions(
+    main
+    PRIVATE TRITON_ENABLE_GRPC=1
+  )
+endif() # TRITON_ENABLE_GRPC
 
 if(${TRITON_ENABLE_HTTP})
   target_compile_definitions(
@@ -240,14 +245,6 @@ if(${TRITON_ENABLE_TRACING})
     main
     PRIVATE TRITON_ENABLE_TRACING=1
   )
-# FIXME: remove, when Windows support is added for Opentelemetry
-  if (NOT WIN32)
-    target_include_directories(
-      main
-      PRIVATE
-        ${OPENTELEMETRY_CPP_INCLUDE_DIRS}
-    )
-  endif()
 endif() # TRITON_ENABLE_TRACING
 
 if(${TRITON_ENABLE_NVTX})
@@ -281,31 +278,116 @@ else()
   )
 endif()
 
+# grpc endpoint
+#
 if(${TRITON_ENABLE_GRPC})
-  #
-  # GRPC
-  #
-  find_package(gRPC CONFIG REQUIRED)
-  message(STATUS "Using gRPC ${gRPC_VERSION}")
+  add_library(
+    grpc-endpoint-library EXCLUDE_FROM_ALL
+    grpc_server.cc
+    grpc_server.h
+  )
 
-  add_subdirectory(grpc)
-  target_link_libraries(
-      main
+  target_compile_features(grpc-endpoint-library PRIVATE cxx_std_11)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(
+      grpc-endpoint-library
       PRIVATE
-        grpc-endpoint-library
+        /W1 /D_WIN32_WINNT=0x0A00 /EHsc
+    )
+  else()
+    target_compile_options(
+      grpc-endpoint-library
+      PRIVATE
+        -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Werror
+    )
+  endif()
+
+  set_target_properties(
+    grpc-endpoint-library
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+  )
+
+  target_link_libraries(
+    grpc-endpoint-library
+    PUBLIC
+      proto-library           # from repo-common
+      triton-common-logging   # from repo-common
+      triton-common-json      # from repo-common
+      grpc-service-library    # from repo-common
+      triton-core-serverapi   # from repo-core
+      triton-core-serverstub  # from repo-core
+      gRPC::grpc++
+      gRPC::grpc
+      protobuf::libprotobuf
   )
 
   target_include_directories(
-    main
+    grpc-endpoint-library
     PRIVATE
       $<TARGET_PROPERTY:gRPC::grpc,INTERFACE_INCLUDE_DIRECTORIES>
   )
 
   target_compile_definitions(
-    main
+    grpc-endpoint-library
     PRIVATE TRITON_ENABLE_GRPC=1
   )
-endif()
+
+  if(${TRITON_ENABLE_GPU})
+    target_compile_definitions(
+      grpc-endpoint-library
+      PRIVATE TRITON_ENABLE_GPU=1
+      PRIVATE TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
+    )
+
+    target_link_libraries(
+      grpc-endpoint-library
+      PUBLIC
+        CUDA::cudart
+    )
+  endif() # TRITON_ENABLE_GPU
+
+  if(${TRITON_ENABLE_METRICS})
+    target_compile_definitions(
+      grpc-endpoint-library
+      PRIVATE TRITON_ENABLE_METRICS=1
+    )
+  endif() # TRITON_ENABLE_METRICS
+
+  if(${TRITON_ENABLE_LOGGING})
+    target_compile_definitions(
+      grpc-endpoint-library
+      PRIVATE TRITON_ENABLE_LOGGING=1
+    )
+  endif() # TRITON_ENABLE_LOGGING
+
+  if(${TRITON_ENABLE_STATS})
+    target_compile_definitions(
+      grpc-endpoint-library
+      PRIVATE TRITON_ENABLE_STATS=1
+    )
+  endif() # TRITON_ENABLE_STATS
+
+  if(${TRITON_ENABLE_TRACING})
+    target_compile_definitions(
+      grpc-endpoint-library
+      PRIVATE TRITON_ENABLE_TRACING=1
+    )
+  endif() # TRITON_ENABLE_TRACING
+
+  if(${TRITON_ENABLE_NVTX})
+    target_compile_definitions(
+      grpc-endpoint-library
+      PRIVATE TRITON_ENABLE_NVTX=1
+    )
+  endif() # TRITON_ENABLE_NVTX
+
+target_link_libraries(
+    main
+    PRIVATE
+      grpc-endpoint-library
+  )
+endif() # TRITON_ENABLE_GRPC
 
 # http endpoint
 #
@@ -358,7 +440,7 @@ if(${TRITON_ENABLE_HTTP}
     target_compile_options(
       http-endpoint-library
       PRIVATE
-        /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
+        /W1 /D_WIN32_WINNT=0x0A00 /EHsc
     )
   else()
     target_compile_options(
@@ -390,16 +472,6 @@ if(${TRITON_ENABLE_HTTP}
     http-endpoint-library
     PRIVATE $<TARGET_PROPERTY:libevhtp::evhtp,INTERFACE_INCLUDE_DIRECTORIES>
   )
-
-  # FIXME when Triton support of Opentelemetry is available on Windows
-  # add ${OPENTELEMETRY_CPP_INCLUDE_DIRS} to above target_include_directories
-  # JIRA DLIS-4786
-  if (NOT WIN32 AND ${TRITON_ENABLE_TRACING})
-    target_include_directories(
-      http-endpoint-library
-      PRIVATE ${OPENTELEMETRY_CPP_INCLUDE_DIRS}
-    )
-  endif()
 
   if(${TRITON_ENABLE_GPU})
     target_compile_definitions(
@@ -507,20 +579,6 @@ if(${TRITON_ENABLE_TRACING})
     tracer.cc tracer.h
   )
 
-  if (NOT WIN32)
-    target_compile_features(tracing-library PRIVATE cxx_std_17)
-
-    target_include_directories(
-      tracing-library
-      PRIVATE ${OPENTELEMETRY_CPP_INCLUDE_DIRS}
-    )
-
-    target_link_libraries(
-      tracing-library
-      PRIVATE
-      ${OPENTELEMETRY_CPP_LIBRARIES})
-  endif()
-
   target_link_libraries(
     tracing-library
     PUBLIC
@@ -600,7 +658,7 @@ if (NOT WIN32)
     target_compile_options(
       simple
       PRIVATE
-        /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
+        /W1 /D_WIN32_WINNT=0x0A00 /EHsc
     )
   else()
     target_compile_options(
@@ -664,7 +722,7 @@ if (NOT WIN32)
     target_compile_options(
       multi_server
       PRIVATE
-        /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
+        /W1 /D_WIN32_WINNT=0x0A00 /EHsc
     )
   else()
     target_compile_options(
@@ -729,7 +787,7 @@ if (NOT WIN32)
       target_compile_options(
         memory_alloc
         PRIVATE
-          /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
+          /W1 /D_WIN32_WINNT=0x0A00 /EHsc
       )
     else()
       target_compile_options(
@@ -773,6 +831,6 @@ if (NOT WIN32)
 endif() # NOT WIN32
 
 # Currently unit tests do not build for windows...
-if ( NOT WIN32)
+if (NOT WIN32)
   add_subdirectory(test test)
 endif() # NOT WIN32

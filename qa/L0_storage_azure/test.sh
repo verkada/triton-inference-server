@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -55,8 +55,9 @@ ACCOUNT_NAME=$AZURE_STORAGE_ACCOUNT
 ACCOUNT_KEY=$AZURE_STORAGE_KEY
 export CUDA_VISIBLE_DEVICES=0
 CLIENT_LOG_BASE="./client"
-INFER_TEST="../common/infer_test.py"
+INFER_TEST=infer_test.py
 EXPECTED_NUM_TESTS="3"
+PERF_CLIENT=../clients/perf_client
 timestamp=$(date +%s)
 CONTAINER_NAME="tritonqatest${timestamp}"
 
@@ -81,38 +82,19 @@ source ../common/util.sh
 rm -f $SERVER_LOG_BASE* $CLIENT_LOG_BASE*
 RET=0
 
-# Used to control which backends are run in infer_test.py
-BACKENDS=${BACKENDS:="graphdef savedmodel onnx libtorch plan"}
+BACKENDS="graphdef savedmodel onnx libtorch plan"
 
-function run_unit_tests() {
-    BACKENDS=$BACKENDS python $INFER_TEST >$CLIENT_LOG 2>&1
-    if [ $? -ne 0 ]; then
-        cat $CLIENT_LOG
-        echo -e "\n***\n*** Test Failed\n***"
-        RET=1
-    else
-        check_test_results $TEST_RESULT_FILE $EXPECTED_NUM_TESTS
-        if [ $? -ne 0 ]; then
-            cat $CLIENT_LOG
-            echo -e "\n***\n*** Test Result Verification Failed\n***"
-            RET=1
-        fi
-    fi
-}
+# Construct model repository
+mkdir -p models
+for FW in $BACKENDS; do
+    cp -r /data/inferenceserver/${REPO_VERSION}/qa_model_repository/${FW}_float32_float32_float32 models/
+done
 
-function setup_model_repo() {
-    # Construct model repository
-    rm -rf models && mkdir -p models
-    for FW in $BACKENDS; do
-        cp -r /data/inferenceserver/${REPO_VERSION}/qa_model_repository/${FW}_float32_float32_float32 models/
-    done
+# Copy models with string inputs and remove nobatch (bs=1) models
+cp -r /data/inferenceserver/${REPO_VERSION}/qa_model_repository/*_object_object_object models/
 
-    # Copy models with string inputs and remove nobatch (bs=1) models
-    cp -r /data/inferenceserver/${REPO_VERSION}/qa_model_repository/*_object_object_object models/
-    rm -rf models/*nobatch*
-}
+rm -rf models/*nobatch*
 
-setup_model_repo
 KIND="KIND_GPU"
 for FW in $BACKENDS; do
     for MC in `ls models/${FW}*/config.pbtxt`; do
@@ -162,51 +144,26 @@ for ENV_VAR in "shared_key"; do
     fi
 
     set +e
-    run_unit_tests
+
+    python $INFER_TEST >$CLIENT_LOG 2>&1
+    if [ $? -ne 0 ]; then
+        cat $CLIENT_LOG
+        echo -e "\n***\n*** Test Failed\n***"
+        RET=1
+    else
+        check_test_results $TEST_RESULT_FILE $EXPECTED_NUM_TESTS
+        if [ $? -ne 0 ]; then
+            cat $CLIENT_LOG
+            echo -e "\n***\n*** Test Result Verification Failed\n***"
+            RET=1
+        fi
+    fi
+
     set -e
 
     kill $SERVER_PID
     wait $SERVER_PID
 done
-
-# Test localization to a specified location
-export TRITON_AZURE_MOUNT_DIRECTORY=`pwd`/azure_localization_test
-
-if [ -d "$TRITON_AZURE_MOUNT_DIRECTORY" ]; then
-  rm -rf $TRITON_AZURE_MOUNT_DIRECTORY
-fi
-
-mkdir -p $TRITON_AZURE_MOUNT_DIRECTORY
-
-SERVER_LOG=$SERVER_LOG_BASE.custom_localization.log
-SERVER_ARGS="--model-repository=$MODEL_REPO --exit-timeout-secs=120"
-
-run_server
-if [ "$SERVER_PID" == "0" ]; then
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-if [ -z "$(ls -A $TRITON_AZURE_MOUNT_DIRECTORY)" ]; then
-    echo -e "\n***\n*** Test localization to a specified location failed. \n***"
-    echo -e "\n***\n*** Specified mount folder $TRITON_AZURE_MOUNT_DIRECTORY is empty \n***"
-    ls -A $TRITON_AZURE_MOUNT_DIRECTORY
-    exit 1
-fi
-
-kill $SERVER_PID
-wait $SERVER_PID
-
-if [ -d "$TRITON_AZURE_MOUNT_DIRECTORY" ] && [ ! -z "$(ls -A $TRITON_AZURE_MOUNT_DIRECTORY)" ]; then
-    echo -e "\n***\n*** Test localization to a specified location failed. \n***"
-    echo -e "\n***\n*** Specified mount folder $TRITON_AZURE_MOUNT_DIRECTORY was not cleared properly. \n***"
-    ls -A $TRITON_AZURE_MOUNT_DIRECTORY
-    exit 1
-fi
-
-rm -rf $TRITON_AZURE_MOUNT_DIRECTORY
-unset TRITON_AZURE_MOUNT_DIRECTORY
 
 # Add test for explicit model control
 SERVER_LOG=$SERVER_LOG_BASE.explicit.log
@@ -222,16 +179,20 @@ if [ "$SERVER_PID" == "0" ]; then
 fi
 
 set +e
-for model in `ls models/`; do
-    code=`curl -s -w %{http_code} -X POST localhost:8000/v2/repository/models/${model}/load`
+for BACKEND in $BACKENDS; do
+    code=`curl -s -w %{http_code} -X POST localhost:8000/v2/repository/models/${BACKEND}_float32_float32_float32/load`
     if [ "$code" != "200" ]; then
         echo -e "\n***\n*** Test Failed\n***"
         RET=1
     fi
-done
 
-# Check that each explicitly loaded model runs correctly
-run_unit_tests
+    $PERF_CLIENT -m ${BACKEND}_float32_float32_float32 -p 3000 -t 1 >$CLIENT_LOG 2>&1
+    if [ $? -ne 0 ]; then
+        echo -e "\n***\n*** Test Failed\n***"
+        cat $CLIENT_LOG
+        RET=1
+    fi
+done
 set -e
 
 kill $SERVER_PID
@@ -250,20 +211,9 @@ SERVER_ARGS="--model-repository=${AS_URL}/models --model-control-mode=poll --str
 az storage container create --name ${CONTAINER_NAME} --account-name ${ACCOUNT_NAME} --account-key ${ACCOUNT_KEY}
 sleep 10
 
-# Setup model repository with minimal configs to be autocompleted
 rm -rf models && mkdir -p models
-AUTOCOMPLETE_BACKENDS="savedmodel"
-for FW in ${AUTOCOMPLETE_BACKENDS}; do
-    for model in ${FW}_float32_float32_float32 ${FW}_object_object_object; do
-        cp -r /data/inferenceserver/${REPO_VERSION}/qa_model_repository/${model} models/
-        # Config files specify things expected by unit test like label_filename
-        # and max_batch_size for comparing results, so remove some key fields
-        # for autocomplete to fill that won't break the unit test.
-        sed -i '/platform:/d' models/${model}/config.pbtxt
-        sed -i '/data_type:/d' models/${model}/config.pbtxt
-        sed -i '/dims:/d' models/${model}/config.pbtxt
-    done
-done
+cp -r /data/inferenceserver/${REPO_VERSION}/qa_model_repository/savedmodel_float32_float32_float32 models/
+rm models/savedmodel_float32_float32_float32/config.pbtxt
 
 # copy contents of models into container.
 for file in `find models -type f` ;do
@@ -279,9 +229,12 @@ if [ "$SERVER_PID" == "0" ]; then
 fi
 
 set +e
-# Check that each polled model runs correctly
-export BACKENDS="${AUTOCOMPLETE_BACKENDS}"
-run_unit_tests
+$PERF_CLIENT -m savedmodel_float32_float32_float32 -p 3000 -t 1 >$CLIENT_LOG 2>&1
+if [ $? -ne 0 ]; then
+    echo -e "\n***\n*** Test Failed\n***"
+    cat $CLIENT_LOG
+    RET=1
+fi
 set -e
 
 kill $SERVER_PID

@@ -25,9 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include <event2/buffer.h>
-#include <zlib.h>
-
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -35,6 +32,8 @@
 #include <string>
 #include <vector>
 
+#include <event2/buffer.h>
+#include <zlib.h>
 #include "common.h"
 #include "triton/core/tritonserver.h"
 
@@ -130,7 +129,7 @@ class DataCompressor {
               CommitEVBuffer(
                   compressed_data, &current_reserved_space,
                   expected_compressed_size),
-              "unexpected error committing output buffer for compression: ");
+              "unexpected error comitting output buffer for compression: ");
           RETURN_MSG_IF_ERR(
               AllocEVBuffer(
                   expected_compressed_size, compressed_data,
@@ -155,7 +154,7 @@ class DataCompressor {
           CommitEVBuffer(
               compressed_data, &current_reserved_space,
               expected_compressed_size - stream.avail_out),
-          "unexpected error committing output buffer for compression: ");
+          "unexpected error comitting output buffer for compression: ");
     }
     return nullptr;  // success
   }
@@ -239,7 +238,7 @@ class DataCompressor {
                     CommitEVBuffer(
                         decompressed_data, &current_reserved_space,
                         output_buffer_size),
-                    "unexpected error committing output buffer for "
+                    "unexpected error comitting output buffer for "
                     "decompression: ");
                 RETURN_MSG_IF_ERR(
                     AllocEVBuffer(
@@ -266,7 +265,7 @@ class DataCompressor {
                 CommitEVBuffer(
                     decompressed_data, &current_reserved_space,
                     output_buffer_size - stream.avail_out),
-                "unexpected error committing output buffer for compression: ");
+                "unexpected error comitting output buffer for compression: ");
           }
           break;
         }

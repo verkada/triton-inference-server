@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-
-# Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -27,7 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 The ``triton`` module provides APIs for logging and loading Triton-recognized
-models in the MLflow Model format. This module exports MLflow Models with the following
+models in the MLflow Model format. This module exports MLflow Models with the following 
 flavors:
 
 Triton format
@@ -38,12 +36,12 @@ import os
 import shutil
 import sys
 
-from mlflow.exceptions import MlflowException
 from mlflow.models import Model
 from mlflow.models.model import MLMODEL_FILE_NAME
+from mlflow.exceptions import MlflowException
 from mlflow.protos.databricks_pb2 import RESOURCE_ALREADY_EXISTS
-from mlflow.tracking._model_registry import DEFAULT_AWAIT_MAX_SLEEP_SECONDS
 from mlflow.utils.annotations import experimental
+from mlflow.tracking._model_registry import DEFAULT_AWAIT_MAX_SLEEP_SECONDS
 
 FLAVOR_NAME = "triton"
 
@@ -65,10 +63,8 @@ def save_model(
 
     path = os.path.abspath(path)
     if os.path.exists(path):
-        raise MlflowException(
-            message="Path '{}' already exists".format(path),
-            error_code=RESOURCE_ALREADY_EXISTS,
-        )
+        raise MlflowException(message="Path '{}' already exists".format(path),
+                              error_code=RESOURCE_ALREADY_EXISTS)
     os.makedirs(path)
     triton_model_path = os.path.normpath(triton_model_path)
     model_data_subpath = os.path.basename(triton_model_path)

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -25,8 +25,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-CLIENT_LOG="./ensemble_client.log"
-EXPECTED_NUM_TESTS="2"
+CLIENT_PY=./lifecycle_test.py
+CLIENT_LOG="./client.log"
+EXPECTED_NUM_TESTS="1"
 TEST_RESULT_FILE='test_results.txt'
 source ../common.sh
 source ../../common/util.sh
@@ -35,7 +36,7 @@ TRITON_DIR=${TRITON_DIR:="/opt/tritonserver"}
 SERVER=${TRITON_DIR}/bin/tritonserver
 BACKEND_DIR=${TRITON_DIR}/backends
 SERVER_ARGS="--model-repository=`pwd`/models --backend-directory=${BACKEND_DIR} --log-verbose=1"
-SERVER_LOG="./ensemble_server.log"
+SERVER_LOG="./inference_server.log"
 
 RET=0
 rm -rf models/ $CLIENT_LOG
@@ -46,10 +47,14 @@ cp ../../python_models/ensemble/config.pbtxt ./models/ensemble
 
 mkdir -p models/add_sub_1/1/
 cp ../../python_models/add_sub/config.pbtxt ./models/add_sub_1
+(cd models/add_sub_1 && \
+          sed -i "s/^name:.*/name: \"add_sub_1\"/" config.pbtxt)
 cp ../../python_models/add_sub/model.py ./models/add_sub_1/1/
 
 mkdir -p models/add_sub_2/1/
 cp ../../python_models/add_sub/config.pbtxt ./models/add_sub_2/
+(cd models/add_sub_2 && \
+          sed -i "s/^name:.*/name: \"add_sub_2\"/" config.pbtxt)
 cp ../../python_models/add_sub/model.py ./models/add_sub_2/1/
 
 # Ensemble GPU Model
