@@ -48,7 +48,6 @@ instance_group {
   profile: "2"
 }
 dynamic_batching {
-  preferred_batch_size: 8
 }
 default_model_filename: "model.plan"
 optimization {

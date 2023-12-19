@@ -91,7 +91,8 @@ parameters: {
 
     NVFUSER_LOG="NvFuser is "
     if [ "$FLAG" == "true" ]; then
-        NVFUSER_LOG+="enabled"
+        # NvFuser support has been disabled. Change to 'enabled' when fixed.
+        NVFUSER_LOG+="disabled"
     elif [ "$FLAG" == "false" ]; then
         NVFUSER_LOG+="disabled"
     else

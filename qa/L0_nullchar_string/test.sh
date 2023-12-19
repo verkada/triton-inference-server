@@ -40,22 +40,16 @@ fi
 
 export CUDA_VISIBLE_DEVICES=0
 
-CLIENT_LOG="./client.log"
 DATADIR=/data/inferenceserver/${REPO_VERSION}/qa_identity_model_repository
-MODELS="graphdef_nobatch_zero_1_object savedmodel_nobatch_zero_1_object"
 NULLCHAR_CLIENT_PY=nullchar_string_client.py
+CLIENT_LOG="./client.log"
 
 SERVER=/opt/tritonserver/bin/tritonserver
-SERVER_ARGS="--model-repository=models"
+SERVER_ARGS="--model-repository=$DATADIR"
 SERVER_LOG="./inference_server.log"
 source ../common/util.sh
 
-rm -f $CLIENT_LOG $SERVER_LOG models
-
-mkdir -p models
-for MODEL in $MODELS; do
-    cp -r $DATADIR/$MODEL models/.
-done
+rm -f $CLIENT_LOG $SERVER_LOG
 
 run_server
 if [ "$SERVER_PID" == "0" ]; then
@@ -71,7 +65,7 @@ set +e
 # Ignore ONNX backend because even though ONNX supports string data type,
 # strings that contain null character in the middle is not allowed.
 # https://github.com/microsoft/onnxruntime/issues/2284
-for MODEL in $MODELS; do
+for MODEL in graphdef_nobatch_zero_1_object savedmodel_nobatch_zero_1_object; do
   python $NULLCHAR_CLIENT_PY -m $MODEL -v >>$CLIENT_LOG 2>&1
   if [ $? -ne 0 ]; then
       RET=1

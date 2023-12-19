@@ -29,7 +29,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-
 #include "triton/core/tritonserver.h"
 
 #define TRITONJSON_STATUSTYPE TRITONSERVER_Error*

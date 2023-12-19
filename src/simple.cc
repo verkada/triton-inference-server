@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -27,7 +27,6 @@
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
 #include <unistd.h>
-
 #include <chrono>
 #include <cstring>
 #include <future>
@@ -36,7 +35,6 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-
 #include "common.h"
 #include "triton/core/tritonserver.h"
 
@@ -247,11 +245,10 @@ ResponseRelease(
 }
 
 void
-InferRequestRelease(
+InferRequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
-  std::promise<void>* barrier = reinterpret_cast<std::promise<void>*>(userp);
-  barrier->set_value();
+  // We reuse the request so we don't delete it here.
 }
 
 void
@@ -565,8 +562,7 @@ main(int argc, char** argv)
   // options can be deleted.
   TRITONSERVER_Server* server_ptr = nullptr;
   FAIL_IF_ERR(
-      TRITONSERVER_ServerNew(&server_ptr, server_options),
-      "creating server object");
+      TRITONSERVER_ServerNew(&server_ptr, server_options), "creating server object");
   FAIL_IF_ERR(
       TRITONSERVER_ServerOptionsDelete(server_options),
       "deleting server options");
@@ -725,14 +721,10 @@ main(int argc, char** argv)
       TRITONSERVER_InferenceRequestSetId(irequest, "my_request_id"),
       "setting ID for the request");
 
-  std::unique_ptr<std::promise<void>> barrier =
-      std::make_unique<std::promise<void>>();
   FAIL_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest, InferRequestRelease,
-          reinterpret_cast<void*>(barrier.get())),
+          irequest, InferRequestComplete, nullptr /* request_release_userp */),
       "setting request release callback");
-  std::future<void> request_release_future = barrier->get_future();
 
   // Add the 2 input tensors to the request...
   auto input0 = "INPUT0";
@@ -843,7 +835,7 @@ main(int argc, char** argv)
       "assigning INPUT1 data");
 
   // Perform inference by calling TRITONSERVER_ServerInferAsync. This
-  // call is asynchronous and therefore returns immediately. The
+  // call is asychronous and therefore returns immediately. The
   // completion of the inference and delivery of the response is done
   // by triton by calling the "response complete" callback functions
   // (InferResponseComplete in this case).
@@ -865,6 +857,7 @@ main(int argc, char** argv)
     // The InferResponseComplete function sets the std::promise so
     // that this thread will block until the response is returned.
     TRITONSERVER_InferenceResponse* completed_response = completed.get();
+
     FAIL_IF_ERR(
         TRITONSERVER_InferenceResponseError(completed_response),
         "response status");
@@ -905,19 +898,6 @@ main(int argc, char** argv)
             irequest, allocator, nullptr /* response_allocator_userp */,
             InferResponseComplete, reinterpret_cast<void*>(p)),
         "setting response callback");
-
-    // We need to make sure that the previous request was released before
-    // reusing it.
-    request_release_future.get();
-
-    // Register a new promise for the request callback barrier.
-    barrier = std::make_unique<std::promise<void>>();
-    request_release_future = barrier->get_future();
-    FAIL_IF_ERR(
-        TRITONSERVER_InferenceRequestSetReleaseCallback(
-            irequest, InferRequestRelease,
-            reinterpret_cast<void*>(barrier.get())),
-        "setting request release callback");
 
     FAIL_IF_ERR(
         TRITONSERVER_ServerInferAsync(
@@ -964,16 +944,6 @@ main(int argc, char** argv)
             irequest, allocator, nullptr /* response_allocator_userp */,
             InferResponseComplete, reinterpret_cast<void*>(p)),
         "setting response callback");
-
-    // Register a new promise for the request callback barrier.
-    barrier = std::make_unique<std::promise<void>>();
-    request_release_future.get();
-
-    FAIL_IF_ERR(
-        TRITONSERVER_InferenceRequestSetReleaseCallback(
-            irequest, InferRequestRelease,
-            reinterpret_cast<void*>(barrier.get())),
-        "setting request release callback");
 
     FAIL_IF_ERR(
         TRITONSERVER_ServerInferAsync(
