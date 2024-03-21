@@ -1113,8 +1113,8 @@ RUN userdel tensorrt-server > /dev/null 2>&1 || true && \
     if ! id -u $TRITON_SERVER_USER > /dev/null 2>&1 ; then \
         useradd $TRITON_SERVER_USER; \
     fi && \
-    [ `id -u $TRITON_SERVER_USER` -eq 1000 ] && \
-    [ `id -g $TRITON_SERVER_USER` -eq 1000 ]
+    [ `id -u $TRITON_SERVER_USER` -eq 1001 ] && \
+    [ `id -g $TRITON_SERVER_USER` -eq 1001 ]
 
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
