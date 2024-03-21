@@ -1126,7 +1126,7 @@ RUN apt-get update && \
             software-properties-common \
             libb64-0d \
             libcurl4-openssl-dev \
-            libre2-9 \
+            libre2-5 \
             git \
             gperf \
             dirmngr \
