@@ -850,8 +850,7 @@ RUN curl -o /tmp/cuda-keyring.deb \
             return """
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
-RUN apt install /tmp/cuda-keyring.deb && \
-    apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
+RUN apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
 """.format(
                 dcgm_version, dcgm_version
             )
