@@ -1085,10 +1085,10 @@ FROM ${BASE_IMAGE}
 
     df += """
 WORKDIR /opt
-COPY --chown=1000:1000 build/install tritonserver
+COPY --chown=1001:1001 build/install tritonserver
 
 WORKDIR /opt/tritonserver
-COPY --chown=1000:1000 NVIDIA_Deep_Learning_Container_License.pdf .
+COPY --chown=1001:1001 NVIDIA_Deep_Learning_Container_License.pdf .
 
 """
     if not FLAGS.no_core_build:
@@ -1097,7 +1097,7 @@ COPY --chown=1000:1000 NVIDIA_Deep_Learning_Container_License.pdf .
             df += """
 LABEL com.amazonaws.sagemaker.capabilities.accept-bind-to-port=true
 LABEL com.amazonaws.sagemaker.capabilities.multi-models=true
-COPY --chown=1000:1000 docker/sagemaker/serve /usr/bin/.
+COPY --chown=1001:1001 docker/sagemaker/serve /usr/bin/.
 """
 
     # This is required since libcublasLt.so is not present during the build
@@ -1185,15 +1185,15 @@ ENV TF_AUTOTUNE_THRESHOLD       2
 ENV TRITON_SERVER_GPU_ENABLED    {gpu_enabled}
 
 # Create a user that can be used to run triton as
-# non-root. Make sure that this user to given ID 1000. All server
+# non-root. Make sure that this user to given ID 1001. All server
 # artifacts copied below are assign to this user.
 ENV TRITON_SERVER_USER=triton-server
 RUN userdel tensorrt-server > /dev/null 2>&1 || true && \
     if ! id -u $TRITON_SERVER_USER > /dev/null 2>&1 ; then \
         useradd $TRITON_SERVER_USER; \
     fi && \
-    [ `id -u $TRITON_SERVER_USER` -eq 1000 ] && \
-    [ `id -g $TRITON_SERVER_USER` -eq 1000 ]
+    [ `id -u $TRITON_SERVER_USER` -eq 1001 ] && \
+    [ `id -g $TRITON_SERVER_USER` -eq 1001 ]
 
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
@@ -1390,10 +1390,10 @@ RUN setx path "%path%;C:\opt\tritonserver\bin"
     df += """
 WORKDIR /opt
 RUN rmdir /S/Q tritonserver || exit 0
-COPY --chown=1000:1000 build/install tritonserver
+COPY --chown=1001:1001 build/install tritonserver
 
 WORKDIR /opt/tritonserver
-COPY --chown=1000:1000 NVIDIA_Deep_Learning_Container_License.pdf .
+COPY --chown=1001:1001 NVIDIA_Deep_Learning_Container_License.pdf .
 
 """
     df += """
