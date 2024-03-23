@@ -1239,13 +1239,13 @@ ENV TCMALLOC_RELEASE_RATE 200
 
     if enable_gpu:
         df += install_dcgm_libraries(argmap["DCGM_VERSION"], target_machine)
-        df += """
-# Extra defensive wiring for CUDA Compat lib
-RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
- && echo ${_CUDA_COMPAT_PATH}/lib > /etc/ld.so.conf.d/00-cuda-compat.conf \
- && ldconfig \
- && rm -f ${_CUDA_COMPAT_PATH}/lib
-"""
+#         df += """
+# # Extra defensive wiring for CUDA Compat lib
+# RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
+#  && echo ${_CUDA_COMPAT_PATH}/lib > /etc/ld.so.conf.d/00-cuda-compat.conf \
+#  && ldconfig \
+#  && rm -f ${_CUDA_COMPAT_PATH}/lib
+# """
     else:
         df += add_cpu_libs_to_linux_dockerfile(backends, target_machine)
 
