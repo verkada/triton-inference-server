@@ -436,6 +436,7 @@ def cmake_cache_extra_args():
 
 def core_cmake_args(components, backends, cmake_dir, install_dir):
     cargs = [
+        cmake_core_arg("CUDA_TOOLKIT_ROOT_DIR", "PATH", "/usr/local/cuda"),
         cmake_core_arg("CMAKE_BUILD_TYPE", None, FLAGS.build_type),
         cmake_core_arg("CMAKE_INSTALL_PREFIX", "PATH", install_dir),
         cmake_core_arg("TRITON_VERSION", "STRING", FLAGS.version),
