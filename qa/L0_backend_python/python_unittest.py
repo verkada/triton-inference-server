@@ -1,4 +1,6 @@
-# Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#!/usr/bin/env python3
+
+# Copyright 2021-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -28,46 +30,39 @@ import sys
 
 sys.path.append("../../common")
 
-import test_util as tu
-import shm_util
+import os
 import unittest
+
+import shm_util
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import *
-import os
+
+# By default, find tritonserver on "localhost", but for windows tests
+# we overwrite the IP address with the TRITONSERVER_IPADDR envvar
+_tritonserver_ipaddr = os.environ.get("TRITONSERVER_IPADDR", "localhost")
 
 
-class PythonUnittest(tu.TestResultCollector):
-
+class PythonUnittest(unittest.TestCase):
     def setUp(self):
         self._shm_leak_detector = shm_util.ShmLeakDetector()
 
     def _run_unittest(self, model_name):
-        with grpcclient.InferenceServerClient("localhost:8001") as client:
+        with grpcclient.InferenceServerClient(f"{_tritonserver_ipaddr}:8001") as client:
             # No input is required
-            result = client.infer(model_name, [], client_timeout=120)
-            output0 = result.as_numpy('OUTPUT0')
+            result = client.infer(model_name, [], client_timeout=240)
+            output0 = result.as_numpy("OUTPUT0")
 
-            # The model returns 1 if the tests were sucessfully passed.
+            # The model returns 1 if the tests were successfully passed.
             # Otherwise, it will return 0.
-            self.assertEqual(output0, [1])
+            self.assertEqual(
+                output0, [1], f"python_unittest failed for model {model_name}"
+            )
 
     def test_python_unittest(self):
-        model_name = os.environ['MODEL_NAME']
-
-        if model_name == 'bls' or model_name == 'bls_memory' or model_name == 'bls_memory_async':
-            # For these tests, the memory region size will be grown. Because of
-            # this we need to use the shared memory probe only on the later
-            # call so that the probe can detect the leak correctly.
+        model_name = os.environ["MODEL_NAME"]
+        with self._shm_leak_detector.Probe() as shm_probe:
             self._run_unittest(model_name)
 
-            # [FIXME] See DLIS-3684
-            self._run_unittest(model_name)
-            with self._shm_leak_detector.Probe() as shm_probe:
-                self._run_unittest(model_name)
-        else:
-            with self._shm_leak_detector.Probe() as shm_probe:
-                self._run_unittest(model_name)
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
