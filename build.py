@@ -849,9 +849,7 @@ def install_dcgm_libraries(dcgm_version, target_machine):
             return """
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
-RUN curl -o /tmp/cuda-keyring.deb \
-    https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/sbsa/cuda-keyring_1.0-1_all.deb \
-    && apt install /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
+RUN apt install /tmp/cuda-keyring.deb && \
     apt-get update && apt-get install -y datacenter-gpu-manager=1:{}
 """.format(
                 dcgm_version, dcgm_version
@@ -1098,10 +1096,10 @@ FROM ${BASE_IMAGE}
 
     df += """
 WORKDIR /opt
-COPY --chown=1000:1000 build/install tritonserver
+COPY --chown=1001:1001 build/install tritonserver
 
 WORKDIR /opt/tritonserver
-COPY --chown=1000:1000 NVIDIA_Deep_Learning_Container_License.pdf .
+COPY --chown=1001:1001 NVIDIA_Deep_Learning_Container_License.pdf .
 
 """
     if not FLAGS.no_core_build:
@@ -1110,7 +1108,7 @@ COPY --chown=1000:1000 NVIDIA_Deep_Learning_Container_License.pdf .
             df += """
 LABEL com.amazonaws.sagemaker.capabilities.accept-bind-to-port=true
 LABEL com.amazonaws.sagemaker.capabilities.multi-models=true
-COPY --chown=1000:1000 docker/sagemaker/serve /usr/bin/.
+COPY --chown=1001:1001 docker/sagemaker/serve /usr/bin/.
 """
 
     # This is required since libcublasLt.so is not present during the build
@@ -1198,15 +1196,15 @@ ENV TF_AUTOTUNE_THRESHOLD       2
 ENV TRITON_SERVER_GPU_ENABLED    {gpu_enabled}
 
 # Create a user that can be used to run triton as
-# non-root. Make sure that this user to given ID 1000. All server
+# non-root. Make sure that this user to given ID 1001. All server
 # artifacts copied below are assign to this user.
 ENV TRITON_SERVER_USER=triton-server
 RUN userdel tensorrt-server > /dev/null 2>&1 || true && \
     if ! id -u $TRITON_SERVER_USER > /dev/null 2>&1 ; then \
         useradd $TRITON_SERVER_USER; \
     fi && \
-    [ `id -u $TRITON_SERVER_USER` -eq 1000 ] && \
-    [ `id -g $TRITON_SERVER_USER` -eq 1000 ]
+    [ `id -u $TRITON_SERVER_USER` -eq 1001 ] && \
+    [ `id -g $TRITON_SERVER_USER` -eq 1001 ]
 
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
@@ -1252,13 +1250,13 @@ ENV TCMALLOC_RELEASE_RATE 200
 
     if enable_gpu:
         df += install_dcgm_libraries(argmap["DCGM_VERSION"], target_machine)
-        df += """
-# Extra defensive wiring for CUDA Compat lib
-RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
- && echo ${_CUDA_COMPAT_PATH}/lib > /etc/ld.so.conf.d/00-cuda-compat.conf \
- && ldconfig \
- && rm -f ${_CUDA_COMPAT_PATH}/lib
-"""
+#         df += """
+# # Extra defensive wiring for CUDA Compat lib
+# RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
+#  && echo ${_CUDA_COMPAT_PATH}/lib > /etc/ld.so.conf.d/00-cuda-compat.conf \
+#  && ldconfig \
+#  && rm -f ${_CUDA_COMPAT_PATH}/lib
+# """
     else:
         df += add_cpu_libs_to_linux_dockerfile(backends, target_machine)
 
@@ -1403,10 +1401,10 @@ RUN setx path "%path%;C:\opt\tritonserver\bin"
     df += """
 WORKDIR /opt
 RUN rmdir /S/Q tritonserver || exit 0
-COPY --chown=1000:1000 build/install tritonserver
+COPY --chown=1001:1001 build/install tritonserver
 
 WORKDIR /opt/tritonserver
-COPY --chown=1000:1000 NVIDIA_Deep_Learning_Container_License.pdf .
+COPY --chown=1001:1001 NVIDIA_Deep_Learning_Container_License.pdf .
 
 """
     df += """
