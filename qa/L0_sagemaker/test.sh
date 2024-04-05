@@ -56,22 +56,24 @@ rm -f *.out
 
 SAGEMAKER_TEST=sagemaker_test.py
 SAGEMAKER_MULTI_MODEL_TEST=sagemaker_multi_model_test.py
-MULTI_MODEL_UNIT_TEST_COUNT=6
+MULTI_MODEL_UNIT_TEST_COUNT=7
 UNIT_TEST_COUNT=9
 CLIENT_LOG="./client.log"
 
 DATADIR=/data/inferenceserver/${REPO_VERSION}
+ENSEMBLEDIR=/data/inferenceserver/${REPO_VERSION}/qa_ensemble_model_repository/qa_model_repository
 SERVER=/opt/tritonserver/bin/tritonserver
 SERVER_LOG="./server.log"
 # Link model repository to "/opt/ml/model"
+rm -rf /opt/ml
 mkdir /opt/ml/
 ln -s `pwd`/models /opt/ml/model
 source ../common/util.sh
 
 mkdir models && \
-    cp -r $DATADIR/qa_model_repository/onnx_int32_int32_int32 models/sm_model && \
+    cp -r $DATADIR/qa_model_repository/plan_int32_int32_int32 models/sm_model && \
     rm -r models/sm_model/2 && rm -r models/sm_model/3 && \
-    sed -i "s/onnx_int32_int32_int32/sm_model/" models/sm_model/config.pbtxt
+    sed -i "s/plan_int32_int32_int32/sm_model/" models/sm_model/config.pbtxt
 
 # Use SageMaker's ping endpoint to check server status
 # Wait until server health endpoint shows ready. Sets WAIT_RET to 0 on
@@ -352,7 +354,7 @@ if [ "$SERVER_PID" == "0" ]; then
     exit 1
 fi
 
-# Ping and expect error code
+# Ping and expect error code in SME mode.
 set +e
 code=`curl -s -w %{http_code} -o ./ping.out localhost:8080/ping`
 set -e
@@ -375,12 +377,39 @@ MODEL2_PATH="models/987654321ihgfedcba/model"
 mkdir -p "${MODEL1_PATH}"
 mkdir -p "${MODEL2_PATH}"
 
-cp -r $DATADIR/qa_model_repository/onnx_int32_int32_int32/* ${MODEL1_PATH} && \
+cp -r $DATADIR/qa_model_repository/plan_int32_int32_int32/* ${MODEL1_PATH} && \
     rm -r ${MODEL1_PATH}/2 && rm -r ${MODEL1_PATH}/3 && \
-    sed -i "s/onnx_int32_int32_int32/sm_mme_model_1/" ${MODEL1_PATH}/config.pbtxt
+    sed -i "s/plan_int32_int32_int32/sm_mme_model_1/" ${MODEL1_PATH}/config.pbtxt
 
-cp -r $DATADIR/qa_identity_model_repository/onnx_zero_1_float32/* ${MODEL2_PATH} && \
-    sed -i "s/onnx_zero_1_float32/sm_mme_model_2/" ${MODEL2_PATH}/config.pbtxt
+cp -r $DATADIR/qa_identity_model_repository/plan_zero_1_float32/* ${MODEL2_PATH} && \
+    sed -i "s/plan_zero_1_float32/sm_mme_model_2/" ${MODEL2_PATH}/config.pbtxt
+
+# Ensemble model
+ENSEMBLE_MODEL_PATH="models/123456789ensemble/model"
+mkdir -p "${ENSEMBLE_MODEL_PATH}"
+
+model_name=python_float32_float32_float32
+
+mkdir -p ${ENSEMBLE_MODEL_PATH}/${model_name}/1 && \
+cp ../python_models/add_sub/model.py ${ENSEMBLE_MODEL_PATH}/${model_name}/1/. && \
+cp ../python_models/add_sub/config.pbtxt ${ENSEMBLE_MODEL_PATH}/${model_name}/.
+(cd ${ENSEMBLE_MODEL_PATH}/${model_name} && \
+                    sed -i "s/label_filename:.*//" config.pbtxt && \
+                    echo "max_batch_size: 64" >> config.pbtxt)
+
+# Ensemble part
+mkdir -p ${ENSEMBLE_MODEL_PATH}/fan_${model_name}/1 && \
+            cp ../python_models/add_sub/model.py ${ENSEMBLE_MODEL_PATH}/fan_${model_name}/1/. && \
+            cp ../python_models/fan_add_sub/config.pbtxt ${ENSEMBLE_MODEL_PATH}/fan_${model_name}/. && \
+            (cd ${ENSEMBLE_MODEL_PATH}/fan_${model_name} && \
+                    sed -i "s/label_filename:.*//" config.pbtxt && \
+                    sed -i "s/model_name: \"ENSEMBLE_MODEL_NAME\"/model_name: \"${model_name}\"/" config.pbtxt && \
+                    sed -i "0,/name:.*/{s/name:.*/name: \"fan_${model_name}\"/}" config.pbtxt && \
+                    echo "max_batch_size: 64" >> config.pbtxt)
+
+# # custom float32 component of ensemble
+cp -r $ENSEMBLEDIR/nop_TYPE_FP32_-1 ${ENSEMBLE_MODEL_PATH}/. && \
+    mkdir -p ${ENSEMBLE_MODEL_PATH}/nop_TYPE_FP32_-1/1
 
 # Start server with 'serve' script
 export SAGEMAKER_MULTI_MODEL=true
@@ -423,9 +452,7 @@ rm -rf /opt/ml/models
 
 kill $SERVER_PID
 wait $SERVE_PID
-
 # MME end
-
 
 unlink /opt/ml/model
 rm -rf /opt/ml/model

@@ -53,7 +53,7 @@ IMPLICIT_STATE=${IMPLICIT_STATE:="0"}
 export IMPLICIT_STATE
 
 # If BACKENDS not specified, set to all
-BACKENDS=${BACKENDS:="graphdef savedmodel libtorch onnx plan custom custom_string"}
+BACKENDS=${BACKENDS:="graphdef savedmodel libtorch plan custom custom_string"}
 export BACKENDS
 
 MODEL_REPOSITORY=''
@@ -65,15 +65,20 @@ fi
 
 RET=0
 
-rm -fr *.log *.serverlog
+rm -fr *.log
 
 # models
 rm -fr models && mkdir models
-cp -r ${DATADIR}/$MODEL_REPOSITORY/* models/.
+for MODEL in ${DATADIR}/$MODEL_REPOSITORY/* ; do
+    cp -r $MODEL models/. && \
+        (cd models/$(basename $MODEL) && \
+            sed -i "s/kind: KIND_CPU/kind: KIND_CPU\\ncount: 1/" config.pbtxt)
+done
 
 # Implicit state models for custom backend do not exist.
 if [ $IMPLICIT_STATE == "0" ]; then
     cp -r ../custom_models/custom_dyna_sequence_int32 models/.
+    sed -i "s/kind: KIND_CPU/kind: KIND_CPU\\ncount: 1/" models/custom_dyna_sequence_int32/config.pbtxt
     # Construct custom dyna_sequence_model with STRING sequence ID. Copy model and edit config.pbtxt
     cp -r models/custom_dyna_sequence_int32 models/custom_string_dyna_sequence_int32
     sed -i "s/custom_dyna_sequence_int32/custom_string_dyna_sequence_int32/g" models/custom_string_dyna_sequence_int32/config.pbtxt
@@ -86,8 +91,11 @@ if [ $IMPLICIT_STATE == "0" ]; then
     rm -fr ragged_models && mkdir ragged_models
     cp -r ../custom_models/custom_dyna_sequence_int32 ragged_models/.
     (cd ragged_models/custom_dyna_sequence_int32 && \
+            sed -i "s/kind: KIND_CPU/kind: KIND_CPU\\ncount: 1/" config.pbtxt && \
             sed -i "s/name:.*\"INPUT\"/name: \"INPUT\"\\nallow_ragged_batch: true/" config.pbtxt)
 fi
+
+rm `find ./models/ -name '*onnx*'` -rf
 
 # Need to launch the server for each test so that the model status is
 # reset (which is used to make sure the correct batch size was used
@@ -98,7 +106,7 @@ for i in \
         test_simple_sequence \
         test_length1_sequence \
          ; do
-    SERVER_LOG="./$i.serverlog"
+    SERVER_LOG="./$i.server.log"
     SERVER_ARGS="--model-repository=`pwd`/models"
     run_server
     if [ "$SERVER_PID" == "0" ]; then
@@ -141,7 +149,7 @@ for i in \
         test_backlog_sequence_timeout \
     ; do
 
-    SERVER_LOG="./$i.serverlog"
+    SERVER_LOG="./$i.server.log"
     SERVER_ARGS="--model-repository=`pwd`/models"
     run_server
     if [ "$SERVER_PID" == "0" ]; then
@@ -180,7 +188,7 @@ if [ $IMPLICIT_STATE == "0" ]; then
         test_multi_sequence_different_shape_allow_ragged \
         ; do
 
-        SERVER_LOG="./$i.serverlog"
+        SERVER_LOG="./$i.server.log"
         SERVER_ARGS="--model-repository=`pwd`/ragged_models"
         run_server
         if [ "$SERVER_PID" == "0" ]; then

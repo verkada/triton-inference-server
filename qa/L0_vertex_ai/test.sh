@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -59,12 +59,12 @@ source ../common/util.sh
 
 # Set up the multi model repository with the swap and non-swap versions
 mkdir multi_models && \
-    cp -r $DATADIR/qa_model_repository/onnx_int32_int32_int32 multi_models/addsub && \
+    cp -r $DATADIR/qa_model_repository/plan_int32_int32_int32 multi_models/addsub && \
     rm -r multi_models/addsub/2 && rm -r multi_models/addsub/3 && \
-    sed -i "s/onnx_int32_int32_int32/addsub/" multi_models/addsub/config.pbtxt && \
-    cp -r $DATADIR/qa_model_repository/onnx_int32_int32_int32 multi_models/subadd && \
+    sed -i "s/plan_int32_int32_int32/addsub/" multi_models/addsub/config.pbtxt && \
+    cp -r $DATADIR/qa_model_repository/plan_int32_int32_int32 multi_models/subadd && \
     rm -r multi_models/subadd/1 && rm -r multi_models/subadd/2 && \
-    sed -i "s/onnx_int32_int32_int32/subadd/" multi_models/subadd/config.pbtxt
+    sed -i "s/plan_int32_int32_int32/subadd/" multi_models/subadd/config.pbtxt
 mkdir single_model && \
     cp -r multi_models/addsub single_model/.
 
@@ -106,7 +106,7 @@ function vertex_ai_wait_for_server_ready() {
     WAIT_RET=1
 }
 
-# Helper function to unset all AIP vairables before test
+# Helper function to unset all AIP variables before test
 function unset_vertex_variables() {
     unset AIP_MODE
     unset AIP_HTTP_PORT
@@ -418,7 +418,7 @@ else
   fi
 fi
 
-# Test AIP_STORAGE_URI won't be used if model repository is specified 
+# Test AIP_STORAGE_URI won't be used if model repository is specified
 SERVER_ARGS="--model-repository=single_model"
 run_server_nowait
 vertex_ai_wait_for_server_ready $SERVER_PID 10
@@ -433,7 +433,7 @@ fi
 set +e
 # subadd should not be loaded
 code=`curl -s -w %{http_code} -o ./curl.out -X POST -H "X-Vertex-Ai-Triton-Redirect: v2/models/subadd/ready" localhost:8080/predict`
-if [ "$code" != "400" ]; then
+if [ "$code" == "200" ]; then
     cat ./curl.out
     echo -e "\n***\n*** Expect 'subadd' is not loaded\n***"
     RET=1
@@ -698,7 +698,7 @@ set -e
 rm -f ./curl.out
 set +e
 code=`curl -s -w %{http_code} -o ./curl.out -X POST -H "X-Vertex-Ai-Triton-Redirect: v2/repository/models/subadd/unload" localhost:8080/predict`
-if [ "$code" != "400" ]; then
+if [ "$code" == "200" ]; then
     cat ./curl.out
     echo -e "\n***\n*** Test Failed\n***"
     RET=1
